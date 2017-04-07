@@ -373,6 +373,35 @@ abstract case class OptionParser[C](programName: String) {
     }
     sorted.toList
   }
+
+  sealed trait WhichCommand
+  case object AllCommands extends WhichCommand
+  case object NoCommands extends WhichCommand
+  case class OneCommand(cmdName: String) extends WhichCommand
+
+  // All (default, old behavior), None, or One
+  def optionsForRender(whichCommand: WhichCommand): List[OptionDef[_, C]] = {
+    val unsorted = options filter { o => o.kind != Head && o.kind != Check && !o.isHidden }
+    val (remaining, sorted) = unsorted partition {_.hasParent} match {
+      case (p, np) => (ListBuffer() ++ p, ListBuffer() ++ np)
+    }
+    var continue = true
+    while (!remaining.isEmpty && continue) {
+      continue = false
+      for {
+        parent <- sorted
+      } {
+        val childrenOfThisParent = remaining filter {_.getParentId == Some(parent.id)}
+        if (childrenOfThisParent.nonEmpty) {
+          remaining --= childrenOfThisParent
+          sorted.insertAll((sorted indexOf parent) + 1, childrenOfThisParent)
+          continue = true
+        }
+      }
+    }
+    sorted.toList
+  }
+
   def usageExample: String = commandExample(None)
   private[scopt] def commandExample(cmd: Option[OptionDef[_, C]]): String = {
     val text = new ListBuffer[String]()
